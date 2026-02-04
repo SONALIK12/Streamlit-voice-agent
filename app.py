@@ -24,18 +24,29 @@ def detect_hi_en(text: str) -> str:
         return 'hi'
     return 'en'
 
+# Helpers to read settings from environment or Streamlit Secrets
+def _get_env_or_secret(key: str, default: str | None = None) -> str | None:
+    val = os.getenv(key)
+    if not val:
+        try:
+            # st.secrets returns None if key not present
+            val = st.secrets.get(key)  # type: ignore[attr-defined]
+        except Exception:
+            val = None
+    return val if val else default
+
 # Helpers to create per-service clients (chat, stt, tts)
 def make_client(prefix: str) -> AzureOpenAI:
-    api_key = os.getenv(f"{prefix}_API_KEY") or os.getenv("AZURE_OPENAI_API_KEY")
-    endpoint = os.getenv(f"{prefix}_ENDPOINT") or os.getenv("AZURE_OPENAI_ENDPOINT")
-    api_version = os.getenv(f"{prefix}_API_VERSION") or os.getenv("AZURE_OPENAI_API_VERSION")
+    api_key = _get_env_or_secret(f"{prefix}_API_KEY") or _get_env_or_secret("AZURE_OPENAI_API_KEY")
+    endpoint = _get_env_or_secret(f"{prefix}_ENDPOINT") or _get_env_or_secret("AZURE_OPENAI_ENDPOINT")
+    api_version = _get_env_or_secret(f"{prefix}_API_VERSION") or _get_env_or_secret("AZURE_OPENAI_API_VERSION")
     return AzureOpenAI(api_key=api_key, api_version=api_version, azure_endpoint=endpoint)
 
 # Helper to validate that either per-service or global credentials exist
 def _missing_creds(prefix: str) -> list[str]:
-    api_key = os.getenv(f"{prefix}_API_KEY") or os.getenv("AZURE_OPENAI_API_KEY")
-    endpoint = os.getenv(f"{prefix}_ENDPOINT") or os.getenv("AZURE_OPENAI_ENDPOINT")
-    api_version = os.getenv(f"{prefix}_API_VERSION") or os.getenv("AZURE_OPENAI_API_VERSION")
+    api_key = _get_env_or_secret(f"{prefix}_API_KEY") or _get_env_or_secret("AZURE_OPENAI_API_KEY")
+    endpoint = _get_env_or_secret(f"{prefix}_ENDPOINT") or _get_env_or_secret("AZURE_OPENAI_ENDPOINT")
+    api_version = _get_env_or_secret(f"{prefix}_API_VERSION") or _get_env_or_secret("AZURE_OPENAI_API_VERSION")
     missing: list[str] = []
     if not api_key:
         missing.append(f"{prefix}_API_KEY or AZURE_OPENAI_API_KEY")
