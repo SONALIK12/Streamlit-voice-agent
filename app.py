@@ -31,9 +31,19 @@ def make_client(prefix: str) -> AzureOpenAI:
     api_version = os.getenv(f"{prefix}_API_VERSION") or os.getenv("AZURE_OPENAI_API_VERSION")
     return AzureOpenAI(api_key=api_key, api_version=api_version, azure_endpoint=endpoint)
 
-chat_client = make_client("AZURE_OPENAI_CHAT")
-stt_client = make_client("AZURE_OPENAI_WHISPER")
-tts_client = make_client("AZURE_OPENAI_TTS")
+# Helper to validate that either per-service or global credentials exist
+def _missing_creds(prefix: str) -> list[str]:
+    api_key = os.getenv(f"{prefix}_API_KEY") or os.getenv("AZURE_OPENAI_API_KEY")
+    endpoint = os.getenv(f"{prefix}_ENDPOINT") or os.getenv("AZURE_OPENAI_ENDPOINT")
+    api_version = os.getenv(f"{prefix}_API_VERSION") or os.getenv("AZURE_OPENAI_API_VERSION")
+    missing: list[str] = []
+    if not api_key:
+        missing.append(f"{prefix}_API_KEY or AZURE_OPENAI_API_KEY")
+    if not endpoint:
+        missing.append(f"{prefix}_ENDPOINT or AZURE_OPENAI_ENDPOINT")
+    if not api_version:
+        missing.append(f"{prefix}_API_VERSION or AZURE_OPENAI_API_VERSION")
+    return missing
 
 # Page configuration
 st.set_page_config(
@@ -133,14 +143,26 @@ def render_cat_audio(audio_bytes: bytes, label: str = "AI speaking…"):
 
 # Manual test panel removed as requested
 
-# Check if Azure OpenAI credentials are set
-required_vars = ["AZURE_OPENAI_API_KEY", "AZURE_OPENAI_ENDPOINT", "AZURE_OPENAI_API_VERSION"]
-missing_vars = [var for var in required_vars if not os.getenv(var)]
+# Validate credentials per service (allowing per-service overrides or global fallbacks)
+missing_chat = _missing_creds("AZURE_OPENAI_CHAT")
+missing_stt = _missing_creds("AZURE_OPENAI_WHISPER")
+missing_tts = _missing_creds("AZURE_OPENAI_TTS")
 
-if missing_vars:
-    st.error(f"⚠️ Missing Azure OpenAI configuration: {', '.join(missing_vars)}")
-    st.info("Create a `.env` file in the project directory with your Azure OpenAI credentials. See `.env.example` for template.")
+if missing_chat or missing_stt or missing_tts:
+    st.error("⚠️ Missing Azure OpenAI configuration.")
+    if missing_chat:
+        st.write("Chat missing:", ", ".join(missing_chat))
+    if missing_stt:
+        st.write("Speech-to-Text missing:", ", ".join(missing_stt))
+    if missing_tts:
+        st.write("Text-to-Speech missing:", ", ".join(missing_tts))
+    st.info("Set these in a local `.env` (not committed) or in Streamlit Cloud → Settings → Environment variables. See `.env.example` for names and versions.")
     st.stop()
+
+# Create clients only after validation so app fails gracefully if env vars are absent
+chat_client = make_client("AZURE_OPENAI_CHAT")
+stt_client = make_client("AZURE_OPENAI_WHISPER")
+tts_client = make_client("AZURE_OPENAI_TTS")
 
 # Record audio
 audio = mic_recorder(
